@@ -53,9 +53,27 @@ async function getStream(id, season, episode) {
   });
   if (!res.ok) throw new Error(`vidlink API returned ${res.status}`);
   const data = await res.json();
-  const playlist = data?.stream?.playlist;
-  if (!playlist) throw new Error('No playlist in response');
-  return playlist;
+  const stream = data?.stream;
+  if (!stream) throw new Error('No stream in response');
+
+  if (typeof stream === 'string') return stream;
+  if (typeof stream.url === 'string') return stream.url;
+  if (typeof stream.playlist === 'string') return stream.playlist;
+
+  const qualities = stream.qualities;
+  if (qualities && typeof qualities === 'object') {
+    const ranked = Object.entries(qualities)
+      .map(([quality, entry]) => [Number(quality), entry])
+      .filter(([quality, entry]) => Number.isFinite(quality) && entry && typeof entry.url === 'string')
+      .sort((left, right) => right[0] - left[0]);
+
+    if (ranked.length) return ranked[0][1].url;
+
+    const fallback = Object.values(qualities).find(entry => entry && typeof entry.url === 'string');
+    if (fallback) return fallback.url;
+  }
+
+  throw new Error('No playable stream in response');
 }
 
 // ── HLS upstream fetcher with redirect support ────────────────────────────────
